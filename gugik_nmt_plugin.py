@@ -205,6 +205,7 @@ class GugikNmt:
             self.iface.removeToolBarIcon(action)
         # remove the toolbar
         del self.toolbar
+        del self.dockwidget
 
     #--------------------------------------------------------------------------
 

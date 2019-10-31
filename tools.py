@@ -153,10 +153,10 @@ class ProfileTool(QgsMapTool):
         points_on_line = []
         max_interval = 0
         intervals = []
-        for i in range(int(num_points)):
+        for i in range(int(num_points)+1):
             points_on_line.append(geom.interpolate(float(max_interval)))
-            max_interval += interval
             intervals.append(max_interval)
+            max_interval += interval
         heights = []
         for pt in points_on_line:
             height = self.parent.getHeight(pt, special=True)

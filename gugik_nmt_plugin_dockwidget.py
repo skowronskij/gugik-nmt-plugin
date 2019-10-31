@@ -49,6 +49,7 @@ class GugikNmtDockWidget(QDockWidget, FORM_CLASS):
         self.setupUi(self)
 
         self.registerTools()
+        self.setButtonIcons()
 
         self.savedFeats = []
 
@@ -209,3 +210,10 @@ class GugikNmtDockWidget(QDockWidget, FORM_CLASS):
     def cbLayerChanged(self):
         self.cbxUpdateField.setChecked(False)
         self.cbFields.clear()
+
+    def setButtonIcons(self):
+        self.tbGetPoint.setIcon(QgsApplication.getThemeIcon('mActionFindReplace.svg'))
+        self.tbExportCsv.setIcon(QgsApplication.getThemeIcon('mActionAddTable.svg'))
+        self.tbCreateTempLyr.setIcon(QgsApplication.getThemeIcon('mActionFileSave.svg'))
+        self.tbExtendLayer.setIcon(QgsApplication.getThemeIcon('mActionStart.svg'))
+        self.tbMakeLine.setIcon(QgsApplication.getThemeIcon('mActionAddPolyline.svg'))
