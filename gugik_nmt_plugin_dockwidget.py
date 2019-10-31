@@ -106,7 +106,6 @@ class GugikNmtDockWidget(QDockWidget, FORM_CLASS):
         if special:
             x, y = point.x(), point.y()
             try:
-                print(f'http://services.gugik.gov.pl/nmt/?request=GetHbyXY&x={x}&y={y}')
                 r = urllib.request.urlopen(f'http://services.gugik.gov.pl/nmt/?request=GetHbyXY&x={x}&y={y}')
                 return r.read().decode()
             except Exception as e:
