@@ -26,14 +26,14 @@ import os
 import urllib.request
 
 from qgis.PyQt import QtGui, uic
-from qgis.PyQt.QtWidgets import QDockWidget, QInputDialog
+from qgis.PyQt.QtWidgets import QDockWidget, QInputDialog, QFileDialog
 from qgis.PyQt.QtCore import pyqtSignal, QVariant
 from qgis.core import (QgsMapLayerProxyModel, QgsField, Qgis, QgsTask, QgsApplication,
     QgsCoordinateReferenceSystem, QgsCoordinateTransform, QgsProject, QgsVectorLayer, 
     QgsFeature, QgsWkbTypes)
 from qgis.utils import iface
 
-from .tools import BaseTool
+from .tools import IdentifyTool, ProfileTool
 
 FORM_CLASS, _ = uic.loadUiType(os.path.join(
     os.path.dirname(__file__), 'gugik_nmt_plugin_dockwidget_base.ui'))
@@ -57,6 +57,7 @@ class GugikNmtDockWidget(QDockWidget, FORM_CLASS):
         self.tbExtendLayer.clicked.connect(self.extendLayerByHeight)
         self.cbxUpdateField.stateChanged.connect(self.switchFieldsCb)
         self.tbCreateTempLyr.clicked.connect(self.createTempLayer)
+        self.tbExportCsv.clicked.connect(self.exportToCsv)
 
     def closeEvent(self, event):
         self.closingPlugin.emit()
@@ -97,10 +98,21 @@ class GugikNmtDockWidget(QDockWidget, FORM_CLASS):
         field_id = data_provider.fields().indexFromName('nmt_wys')
         return field_id
 
-    def getHeight(self, geom, layer=None):
+    def getHeight(self, geom, layer=None, special=False):
         """ Wysłanie zapytania do serwisu GUGiK NMT po wysokość w podanych współrzędnych """
         # http://services.gugik.gov.pl/nmt/?request=GetHbyXY&x=486617&y=637928
         point = geom.asPoint()
+        
+        if special:
+            x, y = point.x(), point.y()
+            try:
+                print(f'http://services.gugik.gov.pl/nmt/?request=GetHbyXY&x={x}&y={y}')
+                r = urllib.request.urlopen(f'http://services.gugik.gov.pl/nmt/?request=GetHbyXY&x={x}&y={y}')
+                return r.read().decode()
+            except Exception as e:
+                iface.messageBar().pushMessage('Wtyczka GUGiK NMT:', str(e), Qgis.Critical, 5)
+                return
+        
         if layer:
             if layer.crs().authid() != 'EPSG:2180':
                 point = self.coordsTransform(point, 'EPSG:2180')
@@ -109,6 +121,7 @@ class GugikNmtDockWidget(QDockWidget, FORM_CLASS):
                 point = self.coordsTransform(point, 'EPSG:2180')
         x, y = point.x(), point.y()
         try:
+            f'http://services.gugik.gov.pl/nmt/?request=GetHbyXY&x={x}&y={y} 22'
             r = urllib.request.urlopen(f'http://services.gugik.gov.pl/nmt/?request=GetHbyXY&x={x}&y={y}')
             return r.read().decode()
         except Exception as e:
@@ -127,20 +140,26 @@ class GugikNmtDockWidget(QDockWidget, FORM_CLASS):
         self.cbFields.addItems([fname for fname in layer.fields().names()])
 
     def registerTools(self):
-        self.identifyTool = BaseTool(self)
+        self.identifyTool = IdentifyTool(self)
         self.identifyTool.setButton(self.tbGetPoint)
-        self.tbGetPoint.clicked.connect(self.activateTool)
+        self.tbGetPoint.clicked.connect(lambda: self.activateTool(self.identifyTool))
+        
+        self.profileTool = ProfileTool(self)
+        self.profileTool.setButton(self.tbMakeLine)
+        self.tbMakeLine.clicked.connect(lambda: self.activateTool(self.profileTool))
 
-    def activateTool(self):
-        iface.mapCanvas().setMapTool(self.identifyTool)
+    def activateTool(self, tool):
+        iface.mapCanvas().setMapTool(tool)
+        if tool == self.profileTool:
+            self.dsbLineLength.setEnabled(True)
 
-    def coordsTransform(self, point, epsg):
+    def coordsTransform(self, geom, epsg):
         activeCrs = QgsProject.instance().crs().authid()
         fromCrs = QgsCoordinateReferenceSystem(activeCrs)
         toCrs = QgsCoordinateReferenceSystem(epsg)
         transformation = QgsCoordinateTransform(fromCrs, toCrs, QgsProject.instance())
-        point = transformation.transform(point)
-        return point
+        geom = transformation.transform(geom)
+        return geom
 
     def createTempLayer(self):
         if not self.savedFeats:
@@ -173,6 +192,20 @@ class GugikNmtDockWidget(QDockWidget, FORM_CLASS):
         self.tempLayer.updateExtents(True)
         self.identifyTool.tempGeom.reset(QgsWkbTypes.PointGeometry)
         del self.task
+
+    def exportToCsv(self):
+        path, _ = QFileDialog.getSaveFileName(filter=f'*.csv')
+        if not path:
+            return   
+        rows = self.twData.rowCount()
+        if not path.lower().endswith('.csv'):
+            path += '.csv'
+        if rows < 1:
+            return
+        with open(f'{path}', 'a') as f:
+            for row in range(rows):
+                data = f'{float(self.twData.item(row, 0).text())};{float(self.twData.item(row, 1).text())}\n'
+                f.write(data)
 
     def cbLayerChanged(self):
         self.cbxUpdateField.setChecked(False)

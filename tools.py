@@ -1,41 +1,25 @@
 # -*- coding: utf-8 -*-
 
 from qgis.PyQt.QtCore import Qt
+from qgis.PyQt.QtWidgets import QInputDialog, QTableWidgetItem
 from qgis.PyQt.QtGui import QCursor, QPixmap, QColor
-from qgis.core import QgsMapLayer, QgsWkbTypes, QgsGeometry, QgsProject
+from qgis.core import (QgsMapLayer, QgsWkbTypes, QgsGeometry, QgsProject, Qgis, QgsDistanceArea,
+    QgsCoordinateTransformContext, QgsUnitTypes, QgsCoordinateReferenceSystem, QgsCoordinateTransform)
 from qgis.gui import QgsRubberBand, QgsMapTool
 from qgis.utils import iface
 
-class BaseTool(QgsMapTool):
+class IdentifyTool(QgsMapTool):
     """ Klasa bazowe narzędzi """
     def __init__(self, parent):
         canvas = iface.mapCanvas()
-        super(BaseTool, self).__init__(canvas)
+        super(IdentifyTool, self).__init__(canvas)
         self.parent = parent
         
-        self.setCursor( QCursor(QPixmap(["16 16 2 1",
-                        "      c None",
-                        ".     c #000000",
-                        "                ",
-                        "        .       ",
-                        "        .       ",
-                        "      .....     ",
-                        "     .     .    ",
-                        "    .   .   .   ",
-                        "   .    .    .  ",
-                        "   .    .    .  ",
-                        " ... ... ... ...",
-                        "   .    .    .  ",
-                        "   .    .    .  ",
-                        "    .   .   .   ",
-                        "     .     .    ",
-                        "      .....     ",
-                        "        .       ",
-                        "        .       "])) )
+        set_cursor(self)
 
         self.tempGeom = QgsRubberBand(canvas, QgsWkbTypes.PointGeometry)
         self.tempGeom.setColor(QColor('red'))
-        self.tempGeom.setIconSize = 5
+        self.tempGeom.setWidth = 5
         
     def canvasMoveEvent(self, e):
         if QgsProject.instance().crs().authid() != 'EPSG:2180':
@@ -73,3 +57,156 @@ class BaseTool(QgsMapTool):
             self.tempGeom.removeLastPoint()
             if self.parent.savedFeats:
                 del self.parent.savedFeats[-1]
+    
+    def deactivate(self):
+        self.tempGeom.reset(QgsWkbTypes.PointGeometry)
+        self.button().setChecked(False)
+
+class ProfileTool(QgsMapTool):
+    def __init__(self, parent):
+        canvas = iface.mapCanvas()
+        super(ProfileTool, self).__init__(canvas)
+        
+        set_cursor(self)
+        self.editing = False
+        self.parent = parent
+        
+        self.tempGeom = QgsRubberBand(canvas, QgsWkbTypes.LineGeometry)
+        self.tempGeom.setColor(QColor('red'))
+        self.tempGeom.setWidth(2)
+
+        self.tempLine = QgsRubberBand(canvas, QgsWkbTypes.LineGeometry)
+        self.tempLine.setColor(QColor('red'))
+        self.tempLine.setWidth(2)
+        self.tempLine.setLineStyle(Qt.DotLine)
+
+    def keyPressEvent(self, e):
+        if e.key() == Qt.Key_Delete:
+            pointsCount = self.tempLine.numberOfVertices() 
+            if pointsCount > 2 and self.editing:
+                self.tempGeom.removePoint(pointsCount-2)
+                self.tempLine.removePoint(pointsCount-2)
+                len_m = self.calculateDistance(self.tempGeom.asGeometry())
+                self.parent.dsbLineLength.setValue(len_m)
+                if self.tempGeom.numberOfVertices() == 1:
+                    self.tempGeom.reset(QgsWkbTypes.LineGeometry)
+                    self.tempLine.reset(QgsWkbTypes.LineGeometry)
+                    self.parent.dsbLineLength.setValue(0)           
+            else:
+                self.reset()
+        elif e.key() == Qt.Key_Escape:
+            self.reset()
+
+    def canvasMoveEvent(self, e):
+        #"Poruszanie" wierzchołkiem linii tymczasowej zgodnie z ruchem myszki
+        if self.tempGeom.numberOfVertices()>1:
+            point = e.snapPoint()
+            self.tempLine.movePoint(point)
+
+    def canvasReleaseEvent(self, e):
+        point = e.snapPoint()
+        if e.button() == int(Qt.LeftButton):
+            #Dodawanie kolejnych wierzchołków
+            if not self.editing:
+                #Nowy obiekt, pierwszy wierzchołek
+                self.tempLine.reset(QgsWkbTypes.LineGeometry)
+                self.tempGeom.reset(QgsWkbTypes.LineGeometry)
+                self.editing = True
+            self.tempGeom.addPoint(point)
+            self.tempLine.addPoint(point)
+            len_m = self.calculateDistance(self.tempGeom.asGeometry())
+            self.parent.dsbLineLength.setValue(len_m)
+        elif e.button() == int(Qt.RightButton):
+            #Zakończenie rysowania obiektu
+            self.tempLine.reset()
+            self.editing = False
+            geometry = self.tempGeom.asGeometry()
+            errors = geometry.validateGeometry()
+            if errors:
+            #Niepoprawna geometria                    
+                for error in errors:
+                    if self.tempGeom.numberOfVertices() > 2:
+                        iface.messageBar().pushMessage('Wtyczka GUGiK NMT:', 'Niepoprawna geometria', Qgis.Critical)
+                    self.tempGeom.reset()
+                return
+            self.get_interval()
+
+    def get_interval(self):
+        interval, ok = QInputDialog.getDouble(self.parent, 'Podaj interwał', 'Interwał [m]:')
+        if not ok:
+            self.reset()
+            return
+        geom = self.tempGeom.asGeometry()
+        
+        activeCrs = QgsProject.instance().crs().authid()
+        fromCrs = QgsCoordinateReferenceSystem(activeCrs)
+        toCrs = QgsCoordinateReferenceSystem(2180)
+        transformation = QgsCoordinateTransform(fromCrs, toCrs, QgsProject.instance())
+        geom.transform(transformation)
+        
+        meters_len = geom.length()
+        if meters_len <= interval:
+            iface.messageBar().pushMessage('Wtyczka GUGiK NMT:', 'Długość linii krótsza lub równa podanemu interwałowi', Qgis.Critical, 5)
+            self.reset()
+            return
+        num_points = meters_len/interval
+        points_on_line = []
+        max_interval = 0
+        intervals = []
+        for i in range(int(num_points)):
+            max_interval += interval
+            intervals.append(max_interval)
+            points_on_line.append(geom.interpolate(float(max_interval)))
+        heights = []
+        for pt in points_on_line:
+            height = self.parent.getHeight(pt, special=True)
+            heights.append(height)
+        if heights and intervals:   
+            self.fillTable(heights, intervals)
+
+    def fillTable(self, heights, intervals):
+        for idx, interval in enumerate(intervals):
+            self.parent.twData.setRowCount(idx+1)
+            self.parent.twData.setItem(idx, 0, QTableWidgetItem(f'{interval}'))
+            self.parent.twData.setItem(idx, 1, QTableWidgetItem(heights[idx]))
+
+    def calculateDistance(self, geometry):
+        distanceArea = QgsDistanceArea()
+        distanceArea.setEllipsoid('GRS80')
+        distanceArea.setSourceCrs(QgsProject.instance().crs(), QgsCoordinateTransformContext())
+        length = distanceArea.measureLength(geometry)
+        result = distanceArea.convertLengthMeasurement(length, QgsUnitTypes.DistanceMeters)
+        return result
+        
+    def reset(self):
+        self.tempLine.reset(QgsWkbTypes.LineGeometry)
+        self.tempGeom.reset(QgsWkbTypes.LineGeometry)
+        self.parent.dsbLineLength.setValue(0)
+        self.parent.twData.setRowCount(0)
+
+    def deactivate(self):
+        self.reset()
+        self.parent.dsbLineLength.setEnabled(False) 
+        self.button().setChecked(False)
+
+
+def set_cursor(tool):
+    tool.setCursor( QCursor(QPixmap(["16 16 2 1",
+        "      c None",
+        ".     c #000000",
+        "                ",
+        "        .       ",
+        "        .       ",
+        "      .....     ",
+        "     .     .    ",
+        "    .   .   .   ",
+        "   .    .    .  ",
+        "   .    .    .  ",
+        " ... ... ... ...",
+        "   .    .    .  ",
+        "   .    .    .  ",
+        "    .   .   .   ",
+        "     .     .    ",
+        "      .....     ",
+        "        .       ",
+        "        .       "])) )
