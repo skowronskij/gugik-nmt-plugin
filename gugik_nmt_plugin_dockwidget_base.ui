@@ -152,7 +152,7 @@
        </widget>
       </item>
       <item alignment="Qt::AlignLeft">
-       <widget class="QToolButton" name="toolButton">
+       <widget class="QToolButton" name="tbCreateTempLyr">
         <property name="text">
          <string>...</string>
         </property>
@@ -252,14 +252,42 @@
      </widget>
     </item>
     <item>
-     <widget class="QToolButton" name="tbMakeLine">
-      <property name="text">
-       <string>...</string>
-      </property>
-     </widget>
-    </item>
-    <item>
-     <widget class="QGraphicsView" name="graphicsView"/>
+     <layout class="QHBoxLayout" name="horizontalLayout_7">
+      <item>
+       <widget class="QToolButton" name="tbMakeLine">
+        <property name="text">
+         <string>...</string>
+        </property>
+       </widget>
+      </item>
+      <item>
+       <widget class="QToolButton" name="tbShowChart">
+        <property name="text">
+         <string>...</string>
+        </property>
+       </widget>
+      </item>
+      <item>
+       <widget class="QToolButton" name="tbExportCsv">
+        <property name="text">
+         <string>...</string>
+        </property>
+       </widget>
+      </item>
+      <item>
+       <spacer name="horizontalSpacer_2">
+        <property name="orientation">
+         <enum>Qt::Horizontal</enum>
+        </property>
+        <property name="sizeHint" stdset="0">
+         <size>
+          <width>40</width>
+          <height>20</height>
+         </size>
+        </property>
+       </spacer>
+      </item>
+     </layout>
     </item>
     <item>
      <spacer name="verticalSpacer">

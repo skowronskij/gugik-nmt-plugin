@@ -26,10 +26,11 @@ import os
 import urllib.request
 
 from qgis.PyQt import QtGui, uic
-from qgis.PyQt.QtWidgets import QDockWidget
+from qgis.PyQt.QtWidgets import QDockWidget, QInputDialog
 from qgis.PyQt.QtCore import pyqtSignal, QVariant
-from qgis.core import (QgsMapLayerProxyModel, QgsField, Qgis,
-    QgsCoordinateReferenceSystem, QgsCoordinateTransform, QgsProject)
+from qgis.core import (QgsMapLayerProxyModel, QgsField, Qgis, QgsTask, QgsApplication,
+    QgsCoordinateReferenceSystem, QgsCoordinateTransform, QgsProject, QgsVectorLayer, 
+    QgsFeature, QgsWkbTypes)
 from qgis.utils import iface
 
 from .tools import BaseTool
@@ -49,9 +50,13 @@ class GugikNmtDockWidget(QDockWidget, FORM_CLASS):
 
         self.registerTools()
 
+        self.savedFeats = []
+
         self.cbLayers.setFilters(QgsMapLayerProxyModel.PointLayer)
+        self.cbLayers.layerChanged.connect(self.cbLayerChanged)
         self.tbExtendLayer.clicked.connect(self.extendLayerByHeight)
         self.cbxUpdateField.stateChanged.connect(self.switchFieldsCb)
+        self.tbCreateTempLyr.clicked.connect(self.createTempLayer)
 
     def closeEvent(self, event):
         self.closingPlugin.emit()
@@ -76,7 +81,7 @@ class GugikNmtDockWidget(QDockWidget, FORM_CLASS):
         for f in features:
             fid = f.id()
             geometry = f.geometry()
-            height = self.getHeight(geometry)
+            height = self.getHeight(geometry, layer=layer)
             field = layer.dataProvider().fields().field(field_id)
             if field.type() in [QVariant.LongLong, QVariant.Int]:
                 height = int(float(height))
@@ -92,12 +97,16 @@ class GugikNmtDockWidget(QDockWidget, FORM_CLASS):
         field_id = data_provider.fields().indexFromName('nmt_wys')
         return field_id
 
-    def getHeight(self, geom):
+    def getHeight(self, geom, layer=None):
         """ Wysłanie zapytania do serwisu GUGiK NMT po wysokość w podanych współrzędnych """
         # http://services.gugik.gov.pl/nmt/?request=GetHbyXY&x=486617&y=637928
         point = geom.asPoint()
-        if QgsProject.instance().crs().authid() != 'EPSG:2180':
-            point = self.coordsTransform(point, 'EPSG:2180')
+        if layer:
+            if layer.crs().authid() != 'EPSG:2180':
+                point = self.coordsTransform(point, 'EPSG:2180')
+        else:
+            if QgsProject.instance().crs().authid() != 'EPSG:2180':
+                point = self.coordsTransform(point, 'EPSG:2180')
         x, y = point.x(), point.y()
         try:
             r = urllib.request.urlopen(f'http://services.gugik.gov.pl/nmt/?request=GetHbyXY&x={x}&y={y}')
@@ -126,10 +135,45 @@ class GugikNmtDockWidget(QDockWidget, FORM_CLASS):
         iface.mapCanvas().setMapTool(self.identifyTool)
 
     def coordsTransform(self, point, epsg):
-        # 'EPSG:4326'
         activeCrs = QgsProject.instance().crs().authid()
         fromCrs = QgsCoordinateReferenceSystem(activeCrs)
         toCrs = QgsCoordinateReferenceSystem(epsg)
         transformation = QgsCoordinateTransform(fromCrs, toCrs, QgsProject.instance())
         point = transformation.transform(point)
         return point
+
+    def createTempLayer(self):
+        if not self.savedFeats:
+            iface.messageBar().pushMessage('Wtyczka GUGiK NMT:', 'Nie dodano punktów', Qgis.Warning, 5)
+        text, ok = QInputDialog.getText(self, 'Stwórz warstwę tymczasową', 'Nazwa warstwy:')
+        if not ok:
+            return
+        epsg = QgsProject.instance().crs().authid()
+        self.tempLayer = QgsVectorLayer(f'Point?crs={epsg.lower()}&field=id:integer&field=nmt_wys:double', text, 'memory')
+        QgsProject.instance().addMapLayer(self.tempLayer)
+        self.task = QgsTask.fromFunction('Dodawanie obiektów', self.populateLayer, data=self.savedFeats)
+        QgsApplication.taskManager().addTask(self.task)
+
+    def populateLayer(self, task: QgsTask, data):
+        lyr_fields = self.tempLayer.fields()
+        total = 100/len(data)
+        features = []
+        for idx, tempFeat in enumerate(data):
+            f = QgsFeature(lyr_fields)
+            f.setGeometry(tempFeat.get('geometry'))
+            attributes = [idx, tempFeat.get('height')]
+            f.setAttributes(attributes)
+            features.append(f)
+            try:
+                self.task.setProgress( idx*total )
+            except AttributeError:
+                #Jeśli nie ma aktywnego procesu to nic nie robimy
+                pass
+        self.tempLayer.dataProvider().addFeatures(features)
+        self.tempLayer.updateExtents(True)
+        self.identifyTool.tempGeom.reset(QgsWkbTypes.PointGeometry)
+        del self.task
+
+    def cbLayerChanged(self):
+        self.cbxUpdateField.setChecked(False)
+        self.cbFields.clear()
