@@ -4,9 +4,9 @@
 
 [general]
 name=GUGiK NMT
-qgisMinimumVersion=3.0
+qgisMinimumVersion=3.4
 description=Wtyczka korzystająca z API Numerycznego Modelu Terenu udostępnianego przez GUGiK
-version=0.2
+version=0.6
 author=Jakub Skowroński SKNG UAM
 email=skowronski.jakub97@gmail.com
 
