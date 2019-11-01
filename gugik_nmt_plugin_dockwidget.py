@@ -22,7 +22,7 @@
  ***************************************************************************/
 """
 
-import os
+import os, csv
 import urllib.request
 
 from qgis.PyQt import QtGui, uic
@@ -194,18 +194,21 @@ class GugikNmtDockWidget(QDockWidget, FORM_CLASS):
         del self.task
 
     def exportToCsv(self):
+        rows = self.twData.rowCount()
+        if rows < 1:
+            return
         path, _ = QFileDialog.getSaveFileName(filter=f'*.csv')
         if not path:
             return   
         rows = self.twData.rowCount()
         if not path.lower().endswith('.csv'):
             path += '.csv'
-        if rows < 1:
-            return
-        with open(f'{path}', 'a') as f:
+        with open(path, 'a') as f:
+            writer = csv.writer(f, delimiter=';')
             for row in range(rows):
-                data = f'{float(self.twData.item(row, 0).text())};{float(self.twData.item(row, 1).text())}\n'
-                f.write(data)
+                dist = self.twData.item(row, 0).text().replace('.', ',') + 'm'
+                val = self.twData.item(row, 1).text().replace('.', ',')
+                writer.writerow([dist, val])
 
     def cbLayerChanged(self):
         self.cbxUpdateField.setChecked(False)
