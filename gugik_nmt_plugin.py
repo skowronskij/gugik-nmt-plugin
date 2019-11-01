@@ -28,7 +28,7 @@ from qgis.PyQt.QtWidgets import QAction
 from .resources import *
 
 # Import the code for the DockWidget
-from .gugik_nmt_plugin_dockwidget import GugikNmtDockWidget
+from .gui.gugik_nmt_plugin_dockwidget import GugikNmtDockWidget
 import os.path
 
 

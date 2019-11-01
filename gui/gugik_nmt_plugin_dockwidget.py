@@ -34,7 +34,7 @@ from qgis.core import (QgsMapLayerProxyModel, QgsField, Qgis, QgsTask, QgsApplic
     QgsFeature, QgsWkbTypes)
 from qgis.utils import iface
 
-from .tools import IdentifyTool, ProfileTool
+from ..tools import IdentifyTool, ProfileTool
 from .info_dialog import InfoDialog
 
 FORM_CLASS, _ = uic.loadUiType(os.path.join(
@@ -113,7 +113,7 @@ class GugikNmtDockWidget(QDockWidget, FORM_CLASS):
                 self.task.setProgress( idx*total )
             except AttributeError as e:
                 pass
-        self.on_success.emit(f'Pomyślnie dodano pole z wysokościa do warstwy: {layer}')
+        self.on_success.emit(f'Pomyślnie dodano pole z wysokościa do warstwy: {layer.name()}')
         del self.task2
 
     def createNewField(self, layer):
@@ -231,12 +231,15 @@ class GugikNmtDockWidget(QDockWidget, FORM_CLASS):
         rows = self.twData.rowCount()
         if not path.lower().endswith('.csv'):
             path += '.csv'
-        with open(path, 'a') as f:
+        with open(path, 'w') as f:
             writer = csv.writer(f, delimiter=';')
+            to_write = [['Odległość', 'Wysokość npm']]
             for row in range(rows):
                 dist = self.twData.item(row, 0).text().replace('.', ',') + 'm'
                 val = self.twData.item(row, 1).text().replace('.', ',')
-                writer.writerow([dist, val])
+                to_write.append([dist, val])
+            writer.writerows(to_write)
+        self.on_success.emit(f'Wygenerowano plik csv w miejscu: {path}')   
 
     def generatePlot(self):
         rows = self.twData.rowCount()
