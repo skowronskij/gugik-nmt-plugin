@@ -35,6 +35,7 @@ from qgis.core import (QgsMapLayerProxyModel, QgsField, Qgis, QgsTask, QgsApplic
 from qgis.utils import iface
 
 from .tools import IdentifyTool, ProfileTool
+from .info_dialog import InfoDialog
 
 FORM_CLASS, _ = uic.loadUiType(os.path.join(
     os.path.dirname(__file__), 'gugik_nmt_plugin_dockwidget_base.ui'))
@@ -53,6 +54,7 @@ class GugikNmtDockWidget(QDockWidget, FORM_CLASS):
         self.setButtonIcons()
 
         self.savedFeats = []
+        self.infoDialog = InfoDialog()
 
         self.cbLayers.setFilters(QgsMapLayerProxyModel.PointLayer)
         self.cbLayers.layerChanged.connect(self.cbLayerChanged)
@@ -61,10 +63,14 @@ class GugikNmtDockWidget(QDockWidget, FORM_CLASS):
         self.tbCreateTempLyr.clicked.connect(self.createTempLayer)
         self.tbExportCsv.clicked.connect(self.exportToCsv)
         self.tbShowProfile.clicked.connect(self.generatePlot)
+        self.tbInfos.clicked.connect(self.showInfo)
 
     def closeEvent(self, event):
         self.closingPlugin.emit()
         event.accept()
+        
+    def showInfo(self):
+        self.infoDialog.show()
 
     def extendLayerByHeight(self):
         """ Rozszerzenie warstwy o pole z wysokością """
