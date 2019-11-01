@@ -1,15 +1,17 @@
 # -*- coding: utf-8 -*-
 
-from qgis.PyQt.QtCore import Qt
+from qgis.PyQt.QtCore import Qt, pyqtSignal
 from qgis.PyQt.QtWidgets import QInputDialog, QTableWidgetItem
 from qgis.PyQt.QtGui import QCursor, QPixmap, QColor
 from qgis.core import (QgsMapLayer, QgsWkbTypes, QgsGeometry, QgsProject, Qgis, QgsDistanceArea,
-    QgsCoordinateTransformContext, QgsUnitTypes, QgsCoordinateReferenceSystem, QgsCoordinateTransform)
+    QgsCoordinateTransformContext, QgsUnitTypes, QgsCoordinateReferenceSystem, QgsCoordinateTransform,
+    QgsTask, QgsApplication)
 from qgis.gui import QgsRubberBand, QgsMapTool
 from qgis.utils import iface
 
 class IdentifyTool(QgsMapTool):
-    """ Klasa bazowe narzędzi """
+    """ Narzędzie identyfikacji wysokości """
+
     def __init__(self, parent):
         canvas = iface.mapCanvas()
         super(IdentifyTool, self).__init__(canvas)
@@ -63,6 +65,8 @@ class IdentifyTool(QgsMapTool):
         self.button().setChecked(False)
 
 class ProfileTool(QgsMapTool):
+    """ Narzędzie do tworzenia krzywej """
+
     def __init__(self, parent):
         canvas = iface.mapCanvas()
         super(ProfileTool, self).__init__(canvas)
@@ -70,7 +74,8 @@ class ProfileTool(QgsMapTool):
         set_cursor(self)
         self.editing = False
         self.parent = parent
-        
+        self.task = None
+
         self.tempGeom = QgsRubberBand(canvas, QgsWkbTypes.LineGeometry)
         self.tempGeom.setColor(QColor('red'))
         self.tempGeom.setWidth(2)
@@ -98,13 +103,16 @@ class ProfileTool(QgsMapTool):
             self.reset()
 
     def canvasMoveEvent(self, e):
-        #"Poruszanie" wierzchołkiem linii tymczasowej zgodnie z ruchem myszki
+        #Poruszanie" wierzchołkiem linii tymczasowej zgodnie z ruchem myszki
         if self.tempGeom.numberOfVertices()>1:
             point = e.snapPoint()
             self.tempLine.movePoint(point)
 
     def canvasReleaseEvent(self, e):
         point = e.snapPoint()
+        if self.task:
+            iface.messageBar().pushMessage('Wtyczka GUGiK NMT:', 'Trwa genrowanie profilu. Aby wygenerować następny poczekaj na pobranie danych', Qgis.Warning)
+            return
         if e.button() == int(Qt.LeftButton):
             #Dodawanie kolejnych wierzchołków
             if not self.editing:
@@ -117,6 +125,8 @@ class ProfileTool(QgsMapTool):
             len_m = self.calculateDistance(self.tempGeom.asGeometry())
             self.parent.dsbLineLength.setValue(len_m)
         elif e.button() == int(Qt.RightButton):
+            if self.tempGeom.numberOfVertices() < 2:
+                return
             #Zakończenie rysowania obiektu
             self.tempLine.reset()
             self.editing = False
@@ -157,12 +167,26 @@ class ProfileTool(QgsMapTool):
             points_on_line.append(geom.interpolate(float(max_interval)))
             intervals.append(max_interval)
             max_interval += interval
+        data = {'points':points_on_line, 'intervals':intervals}
+        self.task = QgsTask.fromFunction('Pobieranie wysokości dla przekroju...', self.generateProfileFromPoints, data=data)
+        QgsApplication.taskManager().addTask(self.task)
+
+    def generateProfileFromPoints(self, task: QgsTask, data):
+        points_on_line = data.get('points')
+        intervals = data.get('intervals')
         heights = []
-        for pt in points_on_line:
+        total = 100/len(points_on_line)
+        for idx, pt in enumerate(points_on_line):
             height = self.parent.getHeight(pt, special=True)
             heights.append(height)
+        try:
+            self.task.setProgress( idx*total )
+        except AttributeError as e:
+            pass
         if heights and intervals:   
             self.fillTable(heights, intervals)
+        self.parent.on_success.emit('Pomyślnie wygenerowano profil')
+        self.task = None
 
     def fillTable(self, heights, intervals):
         for idx, interval in enumerate(intervals):

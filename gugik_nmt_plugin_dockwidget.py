@@ -44,6 +44,7 @@ FORM_CLASS, _ = uic.loadUiType(os.path.join(
 class GugikNmtDockWidget(QDockWidget, FORM_CLASS):
 
     closingPlugin = pyqtSignal()
+    on_success = pyqtSignal(str)
 
     def __init__(self, parent=None):
         """Constructor."""
@@ -52,6 +53,7 @@ class GugikNmtDockWidget(QDockWidget, FORM_CLASS):
 
         self.registerTools()
         self.setButtonIcons()
+        self.on_success.connect(self.showSuccesMessage)
 
         self.savedFeats = []
         self.infoDialog = InfoDialog()
@@ -86,9 +88,20 @@ class GugikNmtDockWidget(QDockWidget, FORM_CLASS):
         if self.cbxSelectedOnly.isChecked():
             features = layer.selectedFeatures()
         else:
-            features = layer.getFeatures()
+            features = [f for f in layer.getFeatures()]
+        data = {'features':features, 'field_id':field_id}
+        self.task2 = QgsTask.fromFunction('Dodawanie pola z wysokościa...', self.addHeightToFields, data=data)
+        QgsApplication.taskManager().addTask(self.task2)
+
+    def addHeightToFields(self, task: QgsTask, data):
         #Iteracja po obiektach i dodanie wartości do pola nmt
-        for f in features:
+        features = data.get('features')
+        if not features:
+            return
+        layer = self.cbLayers.currentLayer()
+        field_id = data.get('field_id')
+        total = 100/len(features)
+        for idx, f in enumerate(features):
             fid = f.id()
             geometry = f.geometry()
             height = self.getHeight(geometry, layer=layer)
@@ -96,6 +109,12 @@ class GugikNmtDockWidget(QDockWidget, FORM_CLASS):
             if field.type() in [QVariant.LongLong, QVariant.Int]:
                 height = int(float(height))
             layer.dataProvider().changeAttributeValues({fid:{field_id:height}})
+            try:
+                self.task.setProgress( idx*total )
+            except AttributeError as e:
+                pass
+        self.on_success.emit(f'Pomyślnie dodano pole z wysokościa do warstwy: {layer}')
+        del self.task2
 
     def createNewField(self, layer):
         """ Utworzenie nowego pola i znalezienie id """
@@ -199,6 +218,7 @@ class GugikNmtDockWidget(QDockWidget, FORM_CLASS):
         self.tempLayer.dataProvider().addFeatures(features)
         self.tempLayer.updateExtents(True)
         self.identifyTool.tempGeom.reset(QgsWkbTypes.PointGeometry)
+        self.on_success.emit(f'Utworzono warstwę tymczasową: {self.tempLayer.name()}')
         del self.task
 
     def exportToCsv(self):
@@ -248,3 +268,6 @@ class GugikNmtDockWidget(QDockWidget, FORM_CLASS):
         self.tbExtendLayer.setIcon(QgsApplication.getThemeIcon('mActionStart.svg'))
         self.tbMakeLine.setIcon(QgsApplication.getThemeIcon('mActionAddPolyline.svg'))
         self.tbShowProfile.setIcon(QgsApplication.getThemeIcon('mActionAddImage.svg'))
+
+    def showSuccesMessage(self, message):
+        iface.messageBar().pushMessage('Wtyczka GUGiK NMT:', message, Qgis.Success)
