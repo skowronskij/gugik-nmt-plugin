@@ -24,6 +24,7 @@
 
 import os, csv
 import urllib.request
+from matplotlib import pyplot as plt
 
 from qgis.PyQt import QtGui, uic
 from qgis.PyQt.QtWidgets import QDockWidget, QInputDialog, QFileDialog
@@ -59,6 +60,7 @@ class GugikNmtDockWidget(QDockWidget, FORM_CLASS):
         self.cbxUpdateField.stateChanged.connect(self.switchFieldsCb)
         self.tbCreateTempLyr.clicked.connect(self.createTempLayer)
         self.tbExportCsv.clicked.connect(self.exportToCsv)
+        self.tbShowProfile.clicked.connect(self.generatePlot)
 
     def closeEvent(self, event):
         self.closingPlugin.emit()
@@ -210,6 +212,25 @@ class GugikNmtDockWidget(QDockWidget, FORM_CLASS):
                 val = self.twData.item(row, 1).text().replace('.', ',')
                 writer.writerow([dist, val])
 
+    def generatePlot(self):
+        rows = self.twData.rowCount()
+        if rows < 1:
+            return
+        dist_list = []
+        values = []
+        for row in range(rows):
+            dist = self.twData.item(row, 0).text()
+            val = self.twData.item(row, 1).text()
+            dist_list.append(float(dist))
+            values.append(float(val))
+
+        fig, ax = plt.subplots()
+
+        ax.set(xlabel='Interwał [m]', ylabel='Wysokość npm',
+            title='Profil podłużny')
+        ax.plot(dist_list, values)
+        plt.show()
+
     def cbLayerChanged(self):
         self.cbxUpdateField.setChecked(False)
         self.cbFields.clear()
@@ -220,3 +241,4 @@ class GugikNmtDockWidget(QDockWidget, FORM_CLASS):
         self.tbCreateTempLyr.setIcon(QgsApplication.getThemeIcon('mActionFileSave.svg'))
         self.tbExtendLayer.setIcon(QgsApplication.getThemeIcon('mActionStart.svg'))
         self.tbMakeLine.setIcon(QgsApplication.getThemeIcon('mActionAddPolyline.svg'))
+        self.tbShowProfile.setIcon(QgsApplication.getThemeIcon('mActionAddImage.svg'))
