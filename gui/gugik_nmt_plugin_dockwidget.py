@@ -29,6 +29,7 @@ from matplotlib import pyplot as plt
 from qgis.PyQt import QtGui, uic
 from qgis.PyQt.QtWidgets import QDockWidget, QInputDialog, QFileDialog
 from qgis.PyQt.QtCore import pyqtSignal, QVariant
+from qgis.PyQt.QtGui import QIcon
 from qgis.core import (QgsMapLayerProxyModel, QgsField, Qgis, QgsTask, QgsApplication,
     QgsCoordinateReferenceSystem, QgsCoordinateTransform, QgsProject, QgsVectorLayer, 
     QgsFeature, QgsWkbTypes)
@@ -66,6 +67,7 @@ class GugikNmtDockWidget(QDockWidget, FORM_CLASS):
         self.tbExportCsv.clicked.connect(self.exportToCsv)
         self.tbShowProfile.clicked.connect(self.generatePlot)
         self.tbInfos.clicked.connect(self.showInfo)
+        self.tbResetPoints.clicked.connect(lambda: self.identifyTool.reset())
 
     def closeEvent(self, event):
         self.closingPlugin.emit()
@@ -193,7 +195,8 @@ class GugikNmtDockWidget(QDockWidget, FORM_CLASS):
 
     def createTempLayer(self):
         if not self.savedFeats:
-            iface.messageBar().pushMessage('Wtyczka GUGiK NMT:', 'Nie dodano punktów', Qgis.Warning, 5)
+            iface.messageBar().pushMessage('Wtyczka GUGiK NMT:', 'Brak punktów do zapisu', Qgis.Warning, 5)
+            return
         text, ok = QInputDialog.getText(self, 'Stwórz warstwę tymczasową', 'Nazwa warstwy:')
         if not ok:
             return
@@ -216,12 +219,11 @@ class GugikNmtDockWidget(QDockWidget, FORM_CLASS):
             try:
                 self.task.setProgress( idx*total )
             except AttributeError:
-                #Jeśli nie ma aktywnego procesu to nic nie robimy
                 pass
         self.tempLayer.dataProvider().addFeatures(features)
         self.tempLayer.updateExtents(True)
-        self.identifyTool.tempGeom.reset(QgsWkbTypes.PointGeometry)
         self.on_success.emit(f'Utworzono warstwę tymczasową: {self.tempLayer.name()}')
+        self.identifyTool.reset()
         del self.task
 
     def exportToCsv(self):
@@ -255,9 +257,8 @@ class GugikNmtDockWidget(QDockWidget, FORM_CLASS):
             val = self.twData.item(row, 1).text()
             dist_list.append(float(dist))
             values.append(float(val))
-
+        
         fig, ax = plt.subplots()
-
         ax.set(xlabel='Interwał [m]', ylabel='Wysokość npm',
             title='Profil podłużny')
         ax.plot(dist_list, values)
@@ -268,12 +269,13 @@ class GugikNmtDockWidget(QDockWidget, FORM_CLASS):
         self.cbFields.clear()
 
     def setButtonIcons(self):
-        self.tbGetPoint.setIcon(QgsApplication.getThemeIcon('mActionFindReplace.svg'))
+        self.tbGetPoint.setIcon(QIcon(':/plugins/gugik_nmt_plugin/icons/index.svg'))
         self.tbExportCsv.setIcon(QgsApplication.getThemeIcon('mActionAddTable.svg'))
         self.tbCreateTempLyr.setIcon(QgsApplication.getThemeIcon('mActionFileSave.svg'))
         self.tbExtendLayer.setIcon(QgsApplication.getThemeIcon('mActionStart.svg'))
         self.tbMakeLine.setIcon(QgsApplication.getThemeIcon('mActionAddPolyline.svg'))
         self.tbShowProfile.setIcon(QgsApplication.getThemeIcon('mActionAddImage.svg'))
+        self.tbResetPoints.setIcon(QgsApplication.getThemeIcon('mIconDelete.svg'))
 
     def showSuccesMessage(self, message):
         iface.messageBar().pushMessage('Wtyczka GUGiK NMT:', message, Qgis.Success)

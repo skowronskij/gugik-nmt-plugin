@@ -59,6 +59,10 @@ class IdentifyTool(QgsMapTool):
             self.tempGeom.removeLastPoint()
             if self.parent.savedFeats:
                 del self.parent.savedFeats[-1]
+
+    def reset(self):
+        self.tempGeom.reset(QgsWkbTypes.PointGeometry)
+        self.parent.savedFeats = []
     
     def deactivate(self):
         self.tempGeom.reset(QgsWkbTypes.PointGeometry)
