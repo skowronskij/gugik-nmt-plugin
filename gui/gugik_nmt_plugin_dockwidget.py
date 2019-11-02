@@ -142,7 +142,7 @@ class GugikNmtDockWidget(QDockWidget, FORM_CLASS):
         
         if layer:
             if layer.crs().authid() != 'EPSG:2180':
-                point = self.coordsTransform(point, 'EPSG:2180')
+                point = self.coordsTransform(point, 'EPSG:2180', layer=layer)
         else:
             if QgsProject.instance().crs().authid() != 'EPSG:2180':
                 point = self.coordsTransform(point, 'EPSG:2180')
@@ -180,8 +180,11 @@ class GugikNmtDockWidget(QDockWidget, FORM_CLASS):
         if tool == self.profileTool:
             self.dsbLineLength.setEnabled(True)
 
-    def coordsTransform(self, geom, epsg):
-        activeCrs = QgsProject.instance().crs().authid()
+    def coordsTransform(self, geom, epsg, layer=None):
+        if layer:
+            activeCrs = layer.crs().authid()
+        else:
+            activeCrs = QgsProject.instance().crs().authid()
         fromCrs = QgsCoordinateReferenceSystem(activeCrs)
         toCrs = QgsCoordinateReferenceSystem(epsg)
         transformation = QgsCoordinateTransform(fromCrs, toCrs, QgsProject.instance())
