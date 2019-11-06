@@ -136,7 +136,7 @@ class GugikNmtDockWidget(QDockWidget, FORM_CLASS):
         if special:
             x, y = point.x(), point.y()
             try:
-                r = urllib.request.urlopen(f'http://services.gugik.gov.pl/nmt/?request=GetHbyXY&x={x}&y={y}')
+                r = urllib.request.urlopen(f'https://services.gugik.gov.pl/nmt/?request=GetHbyXY&x={x}&y={y}')
                 return r.read().decode()
             except Exception as e:
                 iface.messageBar().pushMessage('Wtyczka GUGiK NMT:', str(e), Qgis.Critical, 5)
@@ -150,8 +150,8 @@ class GugikNmtDockWidget(QDockWidget, FORM_CLASS):
                 point = self.coordsTransform(point, 'EPSG:2180')
         x, y = point.x(), point.y()
         try:
-            f'http://services.gugik.gov.pl/nmt/?request=GetHbyXY&x={x}&y={y} 22'
-            r = urllib.request.urlopen(f'http://services.gugik.gov.pl/nmt/?request=GetHbyXY&x={x}&y={y}')
+            # f'http://services.gugik.gov.pl/nmt/?request=GetHbyXY&x={x}&y={y} 22'
+            r = urllib.request.urlopen(f'https://services.gugik.gov.pl/nmt/?request=GetHbyXY&x={x}&y={y}')
             return r.read().decode()
         except Exception as e:
             iface.messageBar().pushMessage('Wtyczka GUGiK NMT:', str(e), Qgis.Critical, 5)
