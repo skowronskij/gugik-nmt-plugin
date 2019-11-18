@@ -45,7 +45,7 @@ FORM_CLASS, _ = uic.loadUiType(os.path.join(
 class GugikNmtDockWidget(QDockWidget, FORM_CLASS):
 
     closingPlugin = pyqtSignal()
-    on_success = pyqtSignal(str)
+    on_message = pyqtSignal(str, object, int)
 
     def __init__(self, parent=None):
         """Constructor."""
@@ -54,7 +54,7 @@ class GugikNmtDockWidget(QDockWidget, FORM_CLASS):
 
         self.registerTools()
         self.setButtonIcons()
-        self.on_success.connect(self.showSuccesMessage)
+        self.on_message.connect(self.showMessage)
 
         self.savedFeats = []
         self.infoDialog = InfoDialog()
@@ -115,7 +115,7 @@ class GugikNmtDockWidget(QDockWidget, FORM_CLASS):
                 self.task.setProgress( idx*total )
             except AttributeError as e:
                 pass
-        self.on_success.emit(f'Pomyślnie dodano pole z wysokościa do warstwy: {layer.name()}')
+        self.on_message.emit(f'Pomyślnie dodano pole z wysokościa do warstwy: {layer.name()}', Qgis.Success, 4)
         del self.task2
 
     def createNewField(self, layer):
@@ -139,7 +139,7 @@ class GugikNmtDockWidget(QDockWidget, FORM_CLASS):
                 r = urllib.request.urlopen(f'https://services.gugik.gov.pl/nmt/?request=GetHbyXY&x={x}&y={y}')
                 return r.read().decode()
             except Exception as e:
-                iface.messageBar().pushMessage('Wtyczka GUGiK NMT:', str(e), Qgis.Critical, 5)
+                self.on_message.emit(str(e), Qgis.Critical, 5)
                 return
         
         if layer:
@@ -154,7 +154,7 @@ class GugikNmtDockWidget(QDockWidget, FORM_CLASS):
             r = urllib.request.urlopen(f'https://services.gugik.gov.pl/nmt/?request=GetHbyXY&x={x}&y={y}')
             return r.read().decode()
         except Exception as e:
-            iface.messageBar().pushMessage('Wtyczka GUGiK NMT:', str(e), Qgis.Critical, 5)
+            self.on_message.emit(str(e), Qgis.Critical, 5)
             return
 
     def switchFieldsCb(self, state):
@@ -195,7 +195,7 @@ class GugikNmtDockWidget(QDockWidget, FORM_CLASS):
 
     def createTempLayer(self):
         if not self.savedFeats:
-            iface.messageBar().pushMessage('Wtyczka GUGiK NMT:', 'Brak punktów do zapisu', Qgis.Warning, 5)
+            self.on_message.emit('Brak punktów do zapisu', Qgis.Warning, 5)
             return
         text, ok = QInputDialog.getText(self, 'Stwórz warstwę tymczasową', 'Nazwa warstwy:')
         if not ok:
@@ -222,7 +222,7 @@ class GugikNmtDockWidget(QDockWidget, FORM_CLASS):
                 pass
         self.tempLayer.dataProvider().addFeatures(features)
         self.tempLayer.updateExtents(True)
-        self.on_success.emit(f'Utworzono warstwę tymczasową: {self.tempLayer.name()}')
+        self.on_message.emit(f'Utworzono warstwę tymczasową: {self.tempLayer.name()}', Qgis.Success, 4)
         self.identifyTool.reset()
         del self.task
 
@@ -244,7 +244,7 @@ class GugikNmtDockWidget(QDockWidget, FORM_CLASS):
                 val = self.twData.item(row, 1).text().replace('.', ',')
                 to_write.append([dist, val])
             writer.writerows(to_write)
-        self.on_success.emit(f'Wygenerowano plik csv w miejscu: {path}')   
+        self.on_message.emit(f'Wygenerowano plik csv w miejscu: {path}', Qgis.Success, 4)   
 
     def generatePlot(self):
         rows = self.twData.rowCount()
@@ -277,5 +277,5 @@ class GugikNmtDockWidget(QDockWidget, FORM_CLASS):
         self.tbShowProfile.setIcon(QgsApplication.getThemeIcon('mActionAddImage.svg'))
         self.tbResetPoints.setIcon(QgsApplication.getThemeIcon('mIconDelete.svg'))
 
-    def showSuccesMessage(self, message):
-        iface.messageBar().pushMessage('Wtyczka GUGiK NMT:', message, Qgis.Success)
+    def showMessage(self, message, level, time=5):
+        iface.messageBar().pushMessage('Wtyczka GUGiK NMT:', message, level, time)

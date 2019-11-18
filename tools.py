@@ -115,7 +115,7 @@ class ProfileTool(QgsMapTool):
     def canvasReleaseEvent(self, e):
         point = e.snapPoint()
         if self.task:
-            iface.messageBar().pushMessage('Wtyczka GUGiK NMT:', 'Trwa genrowanie profilu. Aby wygenerować następny poczekaj na pobranie danych', Qgis.Warning)
+            self.parent.on_message.emit('Trwa genrowanie profilu. Aby wygenerować następny poczekaj na pobranie danych', Qgis.Warning, 4)
             return
         if e.button() == int(Qt.LeftButton):
             #Dodawanie kolejnych wierzchołków
@@ -140,7 +140,7 @@ class ProfileTool(QgsMapTool):
             #Niepoprawna geometria                    
                 for error in errors:
                     if self.tempGeom.numberOfVertices() > 2:
-                        iface.messageBar().pushMessage('Wtyczka GUGiK NMT:', 'Niepoprawna geometria', Qgis.Critical)
+                        self.parent.on_message.emit('Niepoprawna geometria', Qgis.Critical, 4)
                     self.tempGeom.reset()
                 return
             self.get_interval()
@@ -160,15 +160,21 @@ class ProfileTool(QgsMapTool):
         
         meters_len = geom.length()
         if meters_len <= interval:
-            iface.messageBar().pushMessage('Wtyczka GUGiK NMT:', 'Długość linii krótsza lub równa podanemu interwałowi', Qgis.Critical, 5)
+            self.parent.on_message.emit('Długość linii krótsza lub równa podanemu interwałowi', Qgis.Critical, 5)
             self.reset()
             return
-        num_points = meters_len/interval
+        try:
+            num_points = meters_len/interval
+        except ZeroDivisionError:
+            self.parent.on_message.emit('Interwał musi być większy od 0', Qgis.Critical, 4)
+            self.reset()
+            return
         points_on_line = []
         max_interval = 0
         intervals = []
         for i in range(int(num_points)+1):
-            points_on_line.append(geom.interpolate(float(max_interval)))
+            pt = geom.interpolate(float(max_interval))
+            points_on_line.append(pt)
             intervals.append(max_interval)
             max_interval += interval
         data = {'points':points_on_line, 'intervals':intervals}
@@ -189,7 +195,7 @@ class ProfileTool(QgsMapTool):
             pass
         if heights and intervals:   
             self.fillTable(heights, intervals)
-        self.parent.on_success.emit('Pomyślnie wygenerowano profil')
+        self.parent.on_message.emit('Pomyślnie wygenerowano profil', Qgis.Success, 4)
         self.task = None
 
     def fillTable(self, heights, intervals):
