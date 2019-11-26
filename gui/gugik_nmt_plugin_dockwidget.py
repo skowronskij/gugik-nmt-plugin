@@ -132,9 +132,8 @@ class GugikNmtDockWidget(QDockWidget, FORM_CLASS):
         """ Wysłanie zapytania do serwisu GUGiK NMT po wysokość w podanych współrzędnych """
         # http://services.gugik.gov.pl/nmt/?request=GetHbyXY&x=486617&y=637928
         point = geom.asPoint()
-        
         if special:
-            x, y = point.x(), point.y()
+            x, y = point.y(), point.x()
             try:
                 r = urllib.request.urlopen(f'https://services.gugik.gov.pl/nmt/?request=GetHbyXY&x={x}&y={y}')
                 return r.read().decode()
@@ -148,7 +147,7 @@ class GugikNmtDockWidget(QDockWidget, FORM_CLASS):
         else:
             if QgsProject.instance().crs().authid() != 'EPSG:2180':
                 point = self.coordsTransform(point, 'EPSG:2180')
-        x, y = point.x(), point.y()
+        x, y = point.y(), point.x()
         try:
             # f'http://services.gugik.gov.pl/nmt/?request=GetHbyXY&x={x}&y={y} 22'
             r = urllib.request.urlopen(f'https://services.gugik.gov.pl/nmt/?request=GetHbyXY&x={x}&y={y}')
